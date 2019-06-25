@@ -1,0 +1,45 @@
+﻿Imports MySql.Data.MySqlClient
+
+Public Class Stats
+    Dim FormTimerStopWatch As New Stopwatch
+    Private Sub ExitToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ExitToolStripMenuItem.Click
+        Me.Close()
+    End Sub
+
+    Private Sub AboutToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles AboutToolStripMenuItem.Click
+        Dim myfrm As New About
+        myfrm.Show()
+    End Sub
+
+    Private Sub Stats_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+
+    End Sub
+
+    Private Sub lstBots_Click(ByVal sender As Object, ByVal e As System.EventArgs) Handles lstBots.Click
+
+    End Sub
+
+    Private Sub lstBots_SelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles lstBots.SelectedIndexChanged
+
+    End Sub
+
+    Private Sub btnClear_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnClear.Click
+
+    End Sub
+
+    Private Sub AddStatToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles AddStatToolStripMenuItem.Click
+        Call btnAddSetting_Click(sender, e)
+    End Sub
+
+    Private Sub btnAddSetting_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnAddSetting.Click
+
+    End Sub
+
+    Private Sub btnDeleteSetting_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnDeleteSetting.Click
+
+    End Sub
+
+    Private Sub DeleteStatToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles DeleteStatToolStripMenuItem.Click
+        Call btnDeleteSetting_Click(sender, e)
+    End Sub
+End Class

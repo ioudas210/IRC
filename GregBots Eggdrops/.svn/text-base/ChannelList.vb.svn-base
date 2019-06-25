@@ -1,0 +1,118 @@
+﻿Imports MySql.Data.MySqlClient
+
+Public Class ChannelList
+
+    Dim FormTimerStopWatch As New Stopwatch
+    Dim eg As New EggDropBotClasses
+    Dim BotName As String
+    Dim ChannelNameStr As String
+    Dim AutoOp As String
+
+    Public Sub AssignValues()
+        Dim name As String
+
+        If lstChannels.SelectedItems.Count = 0 Then
+            Exit Sub
+        End If
+
+        name = nz(lstChannels.SelectedItems(0).SubItems(2).Text, "")
+        SQL = "SELECT idnum,BotID,ChannelName,AutoOp FROM tblchannellist WHERE botID=" & GetBotID(BotName) & " AND ChannelName=""" & name & """"
+
+        Dim conn As New MySqlConnection
+        Dim myCommand As New MySqlCommand
+        Dim myReader As MySqlDataReader
+
+        conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+        Try
+            conn.Open()
+
+            Try
+                myCommand.Connection = conn
+                myCommand.CommandText = SQL
+                myReader = myCommand.ExecuteReader
+
+                While myReader.Read
+                    txtChannelName.Text = nz(myReader.GetValue(2), "")
+                    cmbAutoOp.Text = nz(myReader.GetValue(3), "")
+                End While
+
+            Catch myerror As MySqlException
+                MsgBox("There was an error reading from the database: " & myerror.Message)
+            End Try
+        Catch myerror As MySqlException
+            MsgBox("Error connecting to the database: " & myerror.Message)
+        Finally
+            If conn.State <> ConnectionState.Closed Then conn.Close()
+        End Try
+    End Sub
+
+    Private Sub AboutToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles AboutToolStripMenuItem.Click
+        Dim myfrm As New About
+        myfrm.Show()
+    End Sub
+
+    Private Sub ExitToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ExitToolStripMenuItem.Click
+        Me.Close()
+    End Sub
+
+    Private Sub ChannelList_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+        'SET BOT NAME
+        BotName = CurrBotName
+        grpChannelList.Text = BotName & " " & grpChannelList.Text
+        PopulateListView(lstChannels, "SELECT idnum,BotID,ChannelName,AutoOP FROM tblchannellist WHERE BotId=" & GetBotID(BotName), 4)
+        cmbAutoOp.Items.Add("Yes")
+        cmbAutoOp.Items.Add("No")
+    End Sub
+
+    Private Sub AddChannelToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles AddChannelToolStripMenuItem.Click
+        Call btnAdd_Click(sender, e)
+    End Sub
+
+    Private Sub btnAdd_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnAdd.Click
+        Dim li As ListViewItem
+
+        For Each li In lstChannels.Items
+            If li.Text = txtChannelName.Text Then
+                MsgBox("You cannot join the same channel twice")
+                Exit Sub
+            End If
+        Next
+
+        'MAKE SURE IT IS A VALID CHANNEL
+        If txtChannelName.Text = "" Then
+            Exit Sub
+        End If
+        If AddChan(txtChannelName.Text, cmbAutoOp.Text, GetBotID(BotName)) Then
+        End If
+
+        PopulateListView(lstChannels, "SELECT idnum,BotID,ChannelName,AutoOP FROM tblchannellist WHERE BotId=" & GetBotID(BotName), 4)
+    End Sub
+
+    Private Sub btnDelete_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnDelete.Click
+        Dim li As ListViewItem
+
+        For Each li In lstChannels.Items
+            If li.SubItems(2).Text = txtChannelName.Text Then
+                If Not DelChan(li.SubItems(2).Text, GetBotID(BotName)) Then
+
+                End If
+                li.Remove()
+            End If
+        Next
+
+        PopulateListView(lstChannels, "SELECT idnum,BotID,ChannelName,AutoOP FROM tblchannellist WHERE BotId=" & GetBotID(BotName), 4)
+    End Sub
+
+    Private Sub DeleteChannelToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles DeleteChannelToolStripMenuItem.Click
+        Call btnDelete_Click(sender, e)
+    End Sub
+
+    Private Sub lstChannels_Click(ByVal sender As Object, ByVal e As System.EventArgs) Handles lstChannels.Click
+        AssignValues()
+    End Sub
+
+    Private Sub lstChannels_SelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles lstChannels.SelectedIndexChanged
+        Call lstChannels_Click(sender, e)
+    End Sub
+End Class

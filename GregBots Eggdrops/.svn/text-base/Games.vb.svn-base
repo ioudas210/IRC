@@ -1,0 +1,60 @@
+﻿Imports System.Net.Sockets
+Imports MySql.Data.MySqlClient
+Imports System.Text
+Imports System.Text.RegularExpressions
+
+Public Class Games
+
+    Public Function CurrentGameDec(ByVal lst As Array) As Boolean
+        Return True
+    End Function
+
+    Public Function PokerBot(ByVal lst As Array) As Boolean
+        Return True
+    End Function
+
+    Public Function BlackJack(ByVal lst As Array) As Boolean
+        Return True
+    End Function
+
+    Public Function GetRandomByBot(ByVal lst As Array) As Boolean
+        Return True
+    End Function
+
+    Public Function Drinks(ByVal cmdPrefix As Char, ByVal Command As String, ByVal Username As String, ByRef IrcSocket As Socket) As Boolean
+        'Dim mt As Match
+        'Dim item, item2
+        'If RegXPChecker("^" & cmdPrefix & "beer (?<item>.+)", Message) Then
+        '    re = New Regex("^" & cmdPrefix & "calc (?<item>.+)\+(?<item2>.+)")
+        '    mt = re.Match(Message)
+        '    item = mt.Groups("item").ToString
+        '    item2 = mt.Groups("item2").ToString
+
+        '    If RegXPChecker(ZeroTo9Regex, item) And RegXPChecker(ZeroTo9Regex, item2) Then
+        '        item = System.Convert.ToInt64(item)
+        '        item2 = System.Convert.ToInt64(item2)
+        '    Else
+        '        Return False
+        '    End If
+
+        '    SendInfo("PRIVMSG " & Channel & " :Answer: " & item + item2, SendBytes, tnSocket)
+        '    Return True
+        'End If
+        If RegXPChecker(A2ZRegex, Username) = False And Not Username = "" Then
+
+
+        End If
+
+        If RegXPChecker(A2ZRegex, Command) = False And Not Command = "" Then
+
+
+        End If
+
+
+        Command = UCase(Command)
+
+        
+
+    End Function
+
+End Class

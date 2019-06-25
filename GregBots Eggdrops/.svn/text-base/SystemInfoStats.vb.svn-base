@@ -1,0 +1,26 @@
+﻿Imports MySql.Data.MySqlClient
+Imports System.Text.RegularExpressions
+
+Public Class SystemInfoStats
+
+    Private Sub ExitToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ExitToolStripMenuItem.Click
+        Me.Close()
+    End Sub
+
+    Private Sub AboutToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles AboutToolStripMenuItem.Click
+        Dim myfrm As New About
+        myfrm.Show()
+    End Sub
+
+    Private Sub ResetToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ResetToolStripMenuItem.Click
+        Call btnReset_Click(sender, e)
+    End Sub
+
+    Private Sub btnReset_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnReset.Click
+
+    End Sub
+
+    Private Sub SystemInfoStats_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+
+    End Sub
+End Class

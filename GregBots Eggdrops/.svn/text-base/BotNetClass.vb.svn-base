@@ -1,0 +1,39 @@
+﻿Imports MySql.Data.MySqlClient
+Imports System.Text
+Imports System.Text.RegularExpressions
+Imports System.Net.Sockets
+
+Public Class BotNetClass
+
+    Public Function LinkBots(ByVal BotID As Long, ByVal BotIDLink As Long) As Boolean
+        'FUNCTION NAME:LinkBots
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+    End Function
+
+    Public Function AddBot(ByVal BotID As Long, ByVal BotIDLink As Long) As Boolean
+        'FUNCTION NAME:AddBot
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+    End Function
+
+    Public Function DelBot(ByVal BotID As Long, ByVal BotIDLink As Long) As Boolean
+        'FUNCTION NAME:DelBot
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+    End Function
+
+    Public Function SaveBotSetting(ByVal BotID As Long, ByVal BotIDLink As Long) As Boolean
+        'FUNCTION NAME:SaveBotSetting
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+    End Function
+End Class

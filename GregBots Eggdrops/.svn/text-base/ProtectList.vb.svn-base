@@ -1,0 +1,139 @@
+﻿Imports MySql.Data.MySqlClient
+
+Public Class ProtectList
+    Dim eg As New EggDropBotClasses
+    Dim TheNick As String
+    Dim botName As String
+
+    Private Sub ProtectList_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+        botName = CurrBotName
+        grpProtectListInfo.Text = grpProtectListInfo.Text & " for " & CurrBotName
+        PopulateListView(lstProtectNames, "SELECT IDNUM,BotID,UserName,BotName,AccessType,Channel FROM tblopprotectlist WHERE BotName=""" & botName & """", 5)
+    End Sub
+
+    Private Sub ExitToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ExitToolStripMenuItem.Click
+        Me.Close()
+    End Sub
+
+    Private Sub AddToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles AddToolStripMenuItem.Click
+        Call btnAdd_Click(sender, e)
+    End Sub
+
+    Private Sub btnAdd_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnAdd.Click
+        'lstProtectNames.Items.Add(txtNickName.Text)
+        'DB CALL
+        Dim li As ListViewItem
+
+        For Each li In lstProtectNames.Items
+            If li.Text = txtNickName.Text Then
+                MsgBox("You cannot add the same user twice")
+                Exit Sub
+            End If
+        Next
+        If AddProtect(txtNickName.Text, CurrBotName, txtAccessType.Text, txtChanName.Text) Then
+
+        End If
+
+        ''MAKE SURE IT IS A VALID CHANNEL
+        If txtNickName.Text = "" Then
+            Exit Sub
+        End If
+
+        PopulateListView(lstProtectNames, "SELECT IDNUM,BotID,UserName,BotName,AccessType,Channel FROM tblopprotectlist WHERE BotName=""" & botName & """", 5)
+    End Sub
+
+    Private Sub btnSave_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnSave.Click
+        PopulateListView(lstProtectNames, "SELECT IDNUM,BotID,UserName,BotName,AccessType,Channel FROM tblopprotectlist WHERE BotName=""" & botName & """", 5)
+    End Sub
+
+    Private Sub btnClear_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnClear.Click
+        txtNickName.Text = ""
+    End Sub
+
+    Private Sub btnDelete_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnDelete.Click
+        Dim x As Integer
+
+        If Not DelProtect(txtNickName.Text, CurrBotName, txtAccessType.Text, txtChanName.Text) Then
+            Exit Sub
+        End If
+
+        For x = 0 To lstProtectNames.Items.Count
+            If lstProtectNames.Items(x).Selected = True Then
+                lstProtectNames.Items(x).Remove()
+                Exit For
+            End If
+        Next
+
+        PopulateListView(lstProtectNames, "SELECT IDNUM,BotID,UserName,BotName,AccessType,Channel FROM tblopprotectlist WHERE BotName=""" & botName & """", 5)
+    End Sub
+
+    Private Sub SaveToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles SaveToolStripMenuItem.Click
+        Call btnSave_Click(sender, e)
+    End Sub
+
+    Private Sub DeleteToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles DeleteToolStripMenuItem.Click
+        Call btnDelete_Click(sender, e)
+    End Sub
+
+    Private Sub lstProtectNames_Click(ByVal sender As Object, ByVal e As System.EventArgs) Handles lstProtectNames.Click
+        txtAccessType.Text = ""
+        txtChanName.Text = ""
+        txtNickName.Text = ""
+        AssignValues()
+    End Sub
+
+    Private Sub lstProtectNames_SelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles lstProtectNames.SelectedIndexChanged
+        txtAccessType.Text = ""
+        txtChanName.Text = ""
+        txtNickName.Text = ""
+        AssignValues()
+    End Sub
+
+    Public Sub AssignValues()
+        Dim name As String
+
+        If lstProtectNames.SelectedItems.Count = 0 Then
+            Exit Sub
+        End If
+
+
+        name = nz(lstProtectNames.SelectedItems(0).SubItems(2).Text, "")
+        SQL = "SELECT UserName,AccessType,Channel FROM tblopprotectlist WHERE BotName=""" & botName & """ AND UserName=""" & name & """"
+
+        Dim conn As New MySqlConnection
+        Dim myCommand As New MySqlCommand
+        Dim myReader As MySqlDataReader
+
+        conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+        Try
+            conn.Open()
+
+            Try
+                myCommand.Connection = conn
+                myCommand.CommandText = SQL
+                myReader = myCommand.ExecuteReader
+
+                While myReader.Read
+                    txtNickName.Text = nz(myReader.GetValue(0), "")
+                    txtAccessType.Text = nz(myReader.GetValue(1), "")
+                    txtChanName.Text = nz(myReader.GetValue(2), "")
+                End While
+
+
+            Catch myerror As MySqlException
+                MsgBox("There was an error reading from the database: " & myerror.Message)
+            End Try
+        Catch myerror As MySqlException
+            MsgBox("Error connecting to the database: " & myerror.Message)
+        Finally
+            If conn.State <> ConnectionState.Closed Then conn.Close()
+        End Try
+    End Sub
+
+    Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
+        Dim ThreadM As New ThreadManager
+
+        ThreadM.InterateThreads()
+    End Sub
+End Class

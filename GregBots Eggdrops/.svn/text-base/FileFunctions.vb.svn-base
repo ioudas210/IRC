@@ -1,0 +1,132 @@
+﻿Imports System.IO
+Imports MySql.Data.MySqlClient
+
+Module FileFunctions
+
+    Public Function FileWrite(ByRef FilePath As String, ByRef DataString As String) As Boolean
+        'FUNCTION NAME: FileWrite 
+        'INPUT        : File Path(Entire Path Including File), DataString(Stuff to Appened)
+        'EXISTANCE    : It writes files
+        'OUTPUT       : A written file with your new data.
+
+        Try
+            Dim writer As StreamWriter = New StreamWriter(FilePath)
+            writer.WriteLine(DataString)
+            writer.Close()
+        Catch ex As Exception
+            MsgBox(ex.Message)
+            Return False
+        End Try
+        Return True
+    End Function
+
+    Public Function FileRead(ByRef FilePath As String, ByRef ReturnString As String) As Boolean
+        'FUNCTION NAME: FileRead
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        Try
+            Dim reader As StreamReader = New StreamReader(FilePath)
+            Do
+                ReturnString = reader.ReadLine
+            Loop Until reader.Peek = -1
+            reader.Close()
+        Catch
+            ReturnString = "File is empty"
+        Finally
+
+        End Try
+        Return True
+    End Function
+
+    Public Function FileDelete(ByRef FilePath As String, ByVal DataString As String, ByVal Type As String) As Boolean
+        'FUNCTION NAME:FileDelete
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        Return True
+    End Function
+
+    Public Function FileCreate(ByRef FilePath As String, ByVal DataString As String, ByVal Type As String) As Boolean
+        'FUNCTION NAME:FileCreate
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        Return True
+    End Function
+
+    Public Function FileEncrypt(ByRef FileName As String, ByVal DataString As String, ByVal Type As String) As Boolean
+        'FUNCTION NAME:FileEncrypt
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        Return True
+    End Function
+
+    Public Function FileLZWCompress(ByRef FilePath As String, ByVal CompressType As String) As Boolean
+        'FUNCTION NAME:FileLZWCompress
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        Try
+            Dim di As New IO.DirectoryInfo(FilePath)
+            For Each fi As IO.FileInfo In di.GetFiles
+                ' compress...
+
+                Dim lzw1 As New CompressionClass
+                lzw1.brInput = New IO.BinaryReader(IO.File.Open(fi.FullName, IO.FileMode.Open))
+                lzw1.bwOutput = New IO.BinaryWriter(IO.File.Open(FilePath & fi.Name & ".lzw14", _
+                     IO.FileMode.OpenOrCreate, IO.FileAccess.Write))
+                lzw1.compress()
+                lzw1.brInput.Close()
+                lzw1.bwOutput.Close()
+
+            Next
+            Return True
+        Catch ex As Exception
+            Return False
+        End Try
+        Return True
+    End Function
+
+    Public Function FileLZWDecompress(ByRef FilePath As String, ByVal CompressType As String) As Boolean
+        'FUNCTION NAME:FileLZWDecompress
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        Try
+            Dim di As New IO.DirectoryInfo(FilePath)
+            For Each fi As IO.FileInfo In di.GetFiles
+       
+                Dim lzw2 As New CompressionClass
+                lzw2.brInput = _
+                     New IO.BinaryReader(IO.File.Open(FilePath & fi.Name & ".lzw14", IO.FileMode.Open))
+                lzw2.bwOutput = _
+                     New IO.BinaryWriter(IO.File.Open(FilePath & fi.Name, IO.FileMode.OpenOrCreate, _
+                     IO.FileAccess.Write))
+                lzw2.expand()
+                lzw2.brInput.Close()
+                lzw2.bwOutput.Close()
+            Next
+            Return True
+        Catch ex As Exception
+            Return False
+        End Try
+        Return True
+    End Function
+
+    Public Function ListFiles(ByVal FileList As String, ByVal FilePath As String) As String
+        Dim file As String
+        Dim files() As String = Directory.GetFiles(FilePath)
+        For Each file In files
+            FileList = FileList & "," & (file)
+        Next
+        Return FileList
+    End Function
+End Module

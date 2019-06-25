@@ -1,0 +1,75 @@
+﻿Public Class ThreadManager
+    Public List As System.Diagnostics.ProcessThreadCollection
+
+    Public Function InterateThreads() As Boolean
+        List = System.Diagnostics.Process.GetCurrentProcess().Threads()
+        Dim objThread As System.Diagnostics.ProcessThread
+
+        For Each objThread In List
+            Debug.Print("Thread: {0:D5}", objThread.Id)
+            Debug.Print(" Start: {0}", objThread.StartTime)
+            Debug.Print(" CPU Time: {0}", objThread.TotalProcessorTime)
+            Debug.Print(" State: {0}", objThread.ThreadState)
+
+            If (objThread.ThreadState = System.Diagnostics.ThreadState.Wait) Then
+                Debug.Print("Reason: {0}", objThread.WaitReason())
+            End If
+
+            Debug.Print(" Address: {0}", objThread.StartAddress())
+        Next
+    End Function
+
+    Public Function KillThread() As Boolean
+        List = System.Diagnostics.Process.GetCurrentProcess().Threads()
+        Dim objThread As System.Diagnostics.ProcessThread
+
+        For Each objThread In List
+            Debug.Print("Thread: {0:D5}", objThread.Id)
+            Debug.Print(" Start: {0}", objThread.StartTime)
+            Debug.Print(" CPU Time: {0}", objThread.TotalProcessorTime)
+            Debug.Print(" State: {0}", objThread.ThreadState)
+
+            If (objThread.ThreadState = System.Diagnostics.ThreadState.Wait) Then
+                Debug.Print("Reason: {0}", objThread.WaitReason())
+            End If
+
+            Debug.Print(" Address: {0}", objThread.StartAddress())
+        Next
+    End Function
+
+    Public Function InsertThreadsINDB() As Boolean
+        List = System.Diagnostics.Process.GetCurrentProcess().Threads()
+        Dim objThread As System.Diagnostics.ProcessThread
+
+        For Each objThread In List
+            Debug.Print("Thread: {0:D5}", objThread.Id)
+            Debug.Print(" Start: {0}", objThread.StartTime)
+            Debug.Print(" CPU Time: {0}", objThread.TotalProcessorTime)
+            Debug.Print(" State: {0}", objThread.ThreadState)
+
+            If (objThread.ThreadState = System.Diagnostics.ThreadState.Wait) Then
+                Debug.Print("Reason: {0}", objThread.WaitReason())
+            End If
+
+            Debug.Print(" Address: {0}", objThread.StartAddress())
+        Next
+    End Function
+
+    Public Function SpawnThread() As Boolean
+        List = System.Diagnostics.Process.GetCurrentProcess().Threads()
+        Dim objThread As System.Diagnostics.ProcessThread
+
+        For Each objThread In List
+            Debug.Print("Thread: {0:D5}", objThread.Id)
+            Debug.Print(" Start: {0}", objThread.StartTime)
+            Debug.Print(" CPU Time: {0}", objThread.TotalProcessorTime)
+            Debug.Print(" State: {0}", objThread.ThreadState)
+
+            If (objThread.ThreadState = System.Diagnostics.ThreadState.Wait) Then
+                Debug.Print("Reason: {0}", objThread.WaitReason())
+            End If
+
+            Debug.Print(" Address: {0}", objThread.StartAddress())
+        Next
+    End Function
+End Class

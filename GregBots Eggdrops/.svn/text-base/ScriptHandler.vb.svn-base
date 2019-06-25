@@ -1,0 +1,23 @@
+﻿Imports MySql.Data.MySqlClient
+Imports System.Text.RegularExpressions
+Imports System.Net.Sockets
+
+Public Class ScriptHandler
+
+    Public Function LstOfAPI(ByVal lst As Array) As Boolean
+        Return True
+    End Function
+
+    Public Function RemovePlugin(ByVal PluginName As String) As Boolean
+        Return True
+    End Function
+
+    Public Function AddPlugin(ByVal PluginName As String) As Boolean
+        Return True
+    End Function
+
+    Public Function SavePlugin(ByVal PluginName As String) As Boolean
+        Return True
+    End Function
+
+End Class

@@ -1,0 +1,57 @@
+﻿Imports System.Xml
+
+Public Class XmlReader
+
+    Public Function ReadXML(ByVal str As String) As String
+        'FUNCTION NAME: ReadXML
+        'INPUT        :str
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        Dim reply As String = ""
+        Dim city As String = ""
+        Dim lattandlong As String = ""
+        Dim temp As String
+        Dim windspeed As String
+        '  Dim windchill As String
+        '  Dim dewpoint As String
+        Dim pressure As String
+        Dim weather As String
+        Dim humidity As String
+        Dim lat As String
+        Dim longe As String
+
+        Try
+            Dim m_xmld As XmlDocument
+            Dim m_nodelist As XmlNodeList
+            '  Dim m_node As XmlNode
+            'Create the XML Document
+
+            m_xmld = New XmlDocument()
+            m_xmld.Load(str)
+            m_nodelist = m_xmld.GetElementsByTagName("current_observation").Item(0).ChildNodes
+
+            city = m_xmld.GetElementsByTagName("display_location").Item(0).ChildNodes(0).InnerText()
+            If city = ", " Then
+                reply = "I cant find the weather captain!"
+            Else
+                lat = m_xmld.GetElementsByTagName("latitude").Item(0).InnerText()
+                longe = m_xmld.GetElementsByTagName("longitude").Item(0).InnerText()
+                lat = System.Math.Round(System.Convert.ToDouble(lat), 1)
+                longe = System.Math.Round(System.Convert.ToDouble(longe), 1)
+                temp = m_xmld.GetElementsByTagName("temperature_string").Item(0).InnerText()
+                windspeed = m_xmld.GetElementsByTagName("wind_string").Item(0).InnerText()
+                pressure = m_xmld.GetElementsByTagName("pressure_string").Item(0).InnerText()
+                weather = m_xmld.GetElementsByTagName("weather").Item(0).InnerText()
+                humidity = m_xmld.GetElementsByTagName("relative_humidity").Item(0).InnerText()
+                reply = "Weather for " & city & ", at latitude " & lat & " and longitude " & longe & " is currently " & temp & " with " & weather & " skies and a wind speed " & windspeed & ". The pressure currently is " & pressure & " with a humidity of " & humidity
+            End If
+
+        Catch myerror As Exception
+            'Error trapping
+            Debug.Print(myerror.ToString())
+        End Try
+        Debug.Print(reply)
+        Return reply
+    End Function
+End Class

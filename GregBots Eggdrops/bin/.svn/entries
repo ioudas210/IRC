@@ -1,0 +1,41 @@
+9
+
+dir
+1
+https://ioudasserver:8443/svn/EasyWinDrop/GregBots%20Eggdrops/bin
+https://ioudasserver:8443/svn/EasyWinDrop
+
+
+
+2009-06-29T00:27:18.890625Z
+1
+ioudas
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+0
+
+Release
+dir
+
+Debug
+dir
+

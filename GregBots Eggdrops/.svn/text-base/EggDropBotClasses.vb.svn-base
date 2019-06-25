@@ -1,0 +1,1711 @@
+﻿Imports System.Net.Sockets
+Imports System.Text
+Imports System.Text.RegularExpressions
+Imports System.IO
+Imports MySql.Data.MySqlClient
+
+Public Class EggDropBotClasses
+    'Socket Stuff
+    Public tnSocket As Socket
+    Public SendBytes As [Byte]()
+
+    'Class textbox to assign text to send back to
+    Public TheTextBox As TextBox
+
+    'BOT SPECIFIC INFO
+    Public ThreadID As Integer
+    Public LocalFirstSW As Boolean
+    Public ChannelJoinSW As Boolean
+    Public ExitSW As Boolean
+    Public BotName As String
+    Public cmdPrefix As Char
+    Public Record As String
+    Public MasterAuth As Boolean
+    Public Master As Boolean = False
+    Public BotID As Long
+    Public LowerLevel As Boolean = False
+    Public ServerName As String
+    Public rndNum As New Random(System.DateTime.Now.Millisecond)
+
+
+    'Uni Class calls
+    Public AclClass As New Acl
+    Public ChannelCommandClass As New ChannelCommand
+    Public MathChannelClass As New MathCheckClass
+
+    'CLASS SPECIFIC FUNCS
+
+    Public Function ConnectBot(ByVal threadID) As Object
+        'FUNCTION NAME:ConnectBot
+        'INPUT        :Thread ID as object
+        'EXISTANCE    :Main Engine
+        'OUTPUT       :Anything
+
+        'INSTANCE CLASS CHILD OBJECTS
+        ChannelCommandClass.CmdPrefix = cmdPrefix
+        MathChannelClass.cmdPrefix = cmdPrefix
+        threadID = My.Settings.ThreadID
+
+        'DECLARE SOCKET VARS
+        Dim RecvString As String = String.Empty
+        Dim NumBytes As Integer = 0
+        Dim RecvBytes(255) As [Byte]
+        Dim nickname, ident, hostname, command2, channel, message
+        Dim regexp As String
+
+ReconnectAgain:
+
+        message = ""
+        RecvString = ""
+        tnSocket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+
+        Try
+            tnSocket.Connect(currServer, PPort)
+            Do While tnSocket.Connected
+
+restartconn:
+                Do
+                    If NumBytes < 256 Then
+                        NumBytes = tnSocket.Receive(RecvBytes, RecvBytes.Length, 0)
+                        RecvString = RecvString + Encoding.ASCII.GetString(RecvBytes, 0, NumBytes)
+                        TheTextBox.AppendText(RecvString)
+                    Else
+                        NumBytes = 0 'RESET
+                    End If
+                Loop While NumBytes = 256
+
+                'WE NOW HAVE RECV DATA
+                While Not RecvString = ""
+                    'DETERMINE IF WE HAVE TO QUIT OR EXIT BY SERVER OR CMD
+                    If Quit(RecvString, threadID) = True Then
+                        Exit While
+                    End If
+
+                    'SERVER PING
+                    If PingServer(RecvString) Then
+                    End If
+
+                    'SERVER SEND 004 WE NOW HAVE CONNECTED TO IT
+                    If InStr(RecvString, "004") > 0 And ConnectedToServer = False Then
+                        ConnectedToServer = True
+                    End If
+
+                    'DETERMINE IF CONNECTED
+                    If ConnectedToServer Then
+
+                        '#############################
+                        '#DETERMINE Notice           #
+                        '#############################
+
+                        regexp = "^\:(?<nickname>.+?)\!(?<ident>.+?)\@(?<hostname>.+?) NOTICE (?<user>.+) \:(?<message>.+)."
+                        Debug.Print(RecvString)
+
+                        If (IrcInputCheck(RecvString, regexp)) Then
+                            Dim re As New Regex(regexp)
+                            Dim user As String
+
+
+                            'CHAT GRABBER
+                            mt = re.Match(RecvString)
+                            nickname = mt.Groups("nickname").ToString
+                            ident = mt.Groups("ident").ToString
+                            hostname = mt.Groups("hostname").ToString
+                            message = mt.Groups("message").ToString
+                            user = mt.Groups("user").ToString
+
+                            'THIS WILL NEED TO BE FIXED BETTER  
+                            If InStr(nickname, "Serv") > 0 Or InStr(nickname, "serv") > 0 Then
+                                RecvString = ""
+                            Else
+                                'SET PASS NOTICE
+                                If RegXPChecker("^set pass:(?<item>.+) (?<item2>.+)", message) Then
+                                    Dim item, item2 As String
+                                    re = New Regex("^set pass:(?<item>.+) (?<item2>.+)")
+                                    mt = re.Match(message)
+                                    item = mt.Groups("item").ToString
+                                    item2 = mt.Groups("item2").ToString
+                                    If item = "" Or item2 = "" Then
+                                        SendInfo("NOTICE " & nickname & " :Invalid syntax " & item & "." & vbCrLf, SendBytes, tnSocket)
+                                    Else
+                                        item2 = GenerateHash(item2)
+                                        Debug.Print(item2)
+                                        item2 = QueryClean(item2)
+                                        item = QueryClean(item)
+                                        SQL = "UPDATE tblauth SET Password=""" & QueryClean(item2) & """ WHERE BotID=" & BotID & " AND UserName=""" & QueryClean(item) & """"
+
+                                        If UpdateRecords(SQL, "Set Pass Hash") = False Then
+                                            Return False
+                                        End If
+                                    End If
+                                End If
+
+                                'AUTH NOTICE
+                                If RegXPChecker("^auth:(?<item>.+)", message) Then
+                                    Dim item As String
+                                    re = New Regex("^auth:(?<item>.+)")
+                                    mt = re.Match(message)
+                                    item = mt.Groups("item").ToString
+
+                                    SQL = "SELECT UserName FROM tblAuth Where BotID=" & BotID & " AND UserName=""" & QueryClean(nickname) & """"
+                                    If CheckIfUserExists(nickname, SQL, BotID) Then
+                                        item = GenerateHash(item)
+                                        Debug.Print(item)
+
+                                        If AclClass.PasswordVerification(nickname, BotID, item) Then
+                                            SendInfo("NOTICE " & nickname & " :Authenticated" & vbCrLf, SendBytes, tnSocket)
+                                            nickname = QueryClean(nickname)
+                                            SQL = "UPDATE tblauth SET IsAuthed=1 WHERE botID=" & BotID & " AND UserName=""" & QueryClean(nickname) & """"
+                                            If UpdateRecords(SQL, "Auth") Then
+
+                                            End If
+                                        Else
+                                            SendInfo("NOTICE " & nickname & " :Invalid password" & vbCrLf, SendBytes, tnSocket)
+                                        End If
+                                    Else
+                                        Return True
+                                    End If
+                                End If
+                            End If
+                            'Check if user is in user list
+                            RecvString = ""
+                        End If
+
+                        '#####################################
+                        '#DETERMINE Private Message to bot   #
+                        '#####################################
+
+                        ':MrTwig!n=Jaw@unaffiliated/jawster NICK :Twig-Away
+                        ':ioudas!n=gc@cpe-74-75-90-244.maine.res.rr.com PRIVMSG assbott2 :hey
+                        regexp = "^\:(?<nickname>.+?)\!(?<ident>.+?)\@(?<hostname>.+?) PRIVMSG (?<user>.+?) \:(?<message>.+)."
+
+                        If (IrcInputCheck(RecvString, regexp)) Then
+                            Dim re As New Regex(regexp)
+                            Dim user As String
+
+                            mt = re.Match(RecvString)
+                            nickname = mt.Groups("nickname").ToString
+                            ident = mt.Groups("ident").ToString
+                            hostname = mt.Groups("hostname").ToString
+                            channel = "#" & mt.Groups("channel").ToString
+                            message = mt.Groups("message").ToString
+                            user = mt.Groups("user").ToString
+
+                            If InStr(user, "#") > 0 Then
+                            Else
+                                If InStr(message, "PING") > 0 Or InStr(message, "TIME") > 0 Or InStr(message, "VERSION") > 0 Then
+
+                                    If CtcpReply(message, nickname) Then
+                                    End If
+                                Else
+                                    RecvString = "PING"
+                                End If
+                            End If
+                        End If
+
+                        '#####################################
+                        '#DETERMINE Chan/Server Kick Commands#
+                        '#####################################
+
+                        regexp = "^\:(?<nickname>.+?)\!(?<ident>.+?)\@(?<hostname>.+?) (?<command>.+?) #(?<channel>.+?) (?<userkicked>.+) \:(?<message>.+)."
+                        If IrcInputCheck(RecvString, regexp) Then
+                            Dim re As New Regex(regexp)
+
+                            mt = re.Match(RecvString)
+                            nickname = mt.Groups("nickname").ToString
+                            ident = mt.Groups("ident").ToString
+                            hostname = mt.Groups("hostname").ToString
+                            command2 = mt.Groups("command").ToString
+                            channel = "#" & mt.Groups("channel").ToString
+                            message = mt.Groups("message").ToString
+                            Dim botProtectRejoin As New BotProtection
+                            Select Case command2
+                                Case "KICK"
+                                    'run kick code
+
+                                    If (botProtectRejoin.DetermineChannelJoin(BotID, channel)) Then
+                                        SendInfo("JOIN " & channel, SendBytes, tnSocket)
+                                    End If
+                                    'RecvString = ""
+
+                                Case "MODE"
+                                    'wee
+                                    'Mode protection goes here
+                                    If botProtectRejoin.DetectBanAgainstMe(channel, True, tnSocket, SendBytes, "greg") Then
+
+                                    End If
+                            End Select
+
+                            If (AclClass.IsMaster(nickname, BotID)) Then
+                                Master = True
+                            Else
+                                Master = False
+                            End If
+                        End If
+
+                        '####################################
+                        '#DETERMINE Chan/Server Commands    #
+                        '####################################
+
+                        regexp = "^\:(?<nickname>.+?)\!(?<ident>.+?)\@(?<hostname>.+?) (?<command>.+?) #(?<channel>.+?) \:(?<message>.+)."
+                        If (IrcInputCheck(RecvString, regexp)) Then
+                            Dim re As New Regex(regexp)
+                            mt = re.Match(RecvString)
+                            nickname = mt.Groups("nickname").ToString
+                            ident = mt.Groups("ident").ToString
+                            hostname = mt.Groups("hostname").ToString
+                            command2 = mt.Groups("command").ToString
+                            channel = "#" & mt.Groups("channel").ToString
+                            message = mt.Groups("message").ToString
+
+                            If (AclClass.IsMaster(nickname, BotID)) Then
+                                Master = True
+                            Else
+                                Master = False
+                            End If
+
+                            'RECONNECT COMMAND.
+                            If message = cmdPrefix & "reconnect" Then
+                                LocalFirstSW = True
+                                ChannelJoinSW = True
+                                tnSocket.Close()
+                                ConnectedToServer = False
+                                GoTo ReconnectAgain
+                            End If
+
+                            'If :gregc!n=gc@cpe-74-75-90-244.maine.res.rr.com QUIT :
+                            If command2 = "QUIT" Then
+                                If AclClass.IsUserAuthed(nickname, BotID, channel) Then
+                                    SQL = "UPDATE tblauth SET IsAuthed=0 WHERE BotID=" & BotID & " AND UserName=""" & QueryClean(nickname) & """"
+                                    If UpdateRecords(SQL, "QUIT AUTH") Then
+                                    End If
+                                Else
+                                End If
+                            End If
+
+                            'DB INSERT OF RCVD DATA TO USER CHAT TABLE
+                            If Record Then
+                                If Not InStr(message, cmdPrefix & "last") > 0 Then
+                                    If InStr(message, cmdPrefix & "seen") > 0 Then
+                                    Else
+                                        If RecordInsert(QueryClean(channel), QueryClean(nickname), QueryClean(message), BotID, ServerName) = False Then
+                                        End If
+                                    End If
+                                End If
+                            End If
+
+                            'Channel Text
+                            If (ChannelGrab(message, channel, nickname)) Then
+                                RecvString = ""
+                                message = ""
+                                Exit While
+                            End If
+
+                            'CTCP CHAN PING REPLY
+                            If CtcpReply(message, nickname) Then
+                                RecvString = ""
+                                Exit While
+                            End If
+
+
+                            If Len(message) > 0 Then
+                                RecvString = ""
+                                Exit While
+                            End If
+                        End If
+                    End If
+
+                    '####################################
+                    '#On server channel commands        #
+                    '####################################
+
+                    'PAST CHANNEL COMMANDS Server commands go here
+                    If RegXPChecker("\:.+ 433 \* .+ \:.+", RecvString) Then
+                        Dim newnick As String
+                        newnick = "testbot"
+                        SendInfo("NICK " & newnick & vbCrLf, SendBytes, tnSocket)
+                    End If
+
+                    Debug.Print(RecvString)
+
+                    If InStr(RecvString, "376") Then
+                        Debug.Print("")
+                    End If
+
+
+                    If RegXPChecker("\:.+ 376 .+", RecvString) Then
+                        InitialJoin()
+                    End If
+                    ':irc.mad-season.com 376 assbott2 :End of /MOTD command.
+                    'ASSIGN SERVER NICK  
+                    'ALSO HANDLES CHANNEL JOINS
+                    SetNickOnServer(tnSocket)
+
+                    RecvString = ""
+                End While
+            Loop
+
+        Catch myerror As Exception
+            'NEED A BETTER METHOD FOR HANDLING
+            Debug.Print(myerror.GetHashCode())
+            Debug.Print(myerror.Message)
+            Debug.Print(myerror.ToString)
+
+            Dim thetime As String = Format(Today, "yyyy/MM/dd")
+            Dim errorHandleStr As String = QueryClean(myerror.ToString)
+
+            SQL = "INSERT INTO tblerrorlog(botid, ErrorNumber, ErrorMessage,HappenedWhen,BotName) VALUES(" & BotID & ", """ & errorHandleStr & """, """ & myerror.Message & " " & message & """,""" & thetime & """,""" & BotName & """)"
+            Try
+                If InsertRecords(SQL, "ErrorLog") Then
+
+                End If
+
+            Catch ex As Exception
+
+            End Try
+
+            'WORD BASED EXCEPTION HANDLING
+            Debug.Print(myerror.Message)
+
+            Select Case myerror.Message
+                Case "A request to send or receive data was disallowed because the socket is not connected and (when sending on a datagram socket using a sendto call) no address was supplied"
+                    GoTo cleanup
+                Case "An established connection was aborted by the software in your host machine"
+                    GoTo cleanup
+                Case "Cannot access a disposed object. Object name: 'System.Net.Sockets.Socket'."
+                    GoTo cleanup
+                Case "An existing connection was forcibly closed by the remote host"
+                    GoTo cleanup
+            End Select
+
+            'HASH CODE SEEMS TO BE THE ONLY WAY TO GET UNIQUE ERROR NUMS.
+            'Too many api calls crash weird.
+
+            Select Case myerror.GetHashCode()
+                Case 1997173
+                    'GoTo cleanup
+            End Select
+
+            Command = Nothing
+            RecvString = Nothing
+            GoTo restartconn
+        End Try
+
+        'Cleanup
+        'CLEAN UP ALL VARS HERE
+cleanup:
+        tnSocket.Close()
+        tnSocket = Nothing
+        Command = Nothing
+        RecvString = Nothing
+        ThreadKillID = 9999
+        Return "Dead"
+    End Function
+
+    Private Function ChannelGrab(ByVal Message As String, ByVal channel As String, ByVal nickname As String) As Boolean
+        'FUNCTION NAME:ChannelGrab
+        'INPUT        :Message, Channel, Nick
+        'EXISTANCE    :Grabs channel text and determines if command has been issued
+        'OUTPUT       :true or false of a command is issues
+        'PP Note      :This also can do many things such as send to channels etc.
+
+        Dim re As New Regex("")
+        Dim mt As Match
+        Dim item, item2, result
+
+        '###################################
+        '#DETERMINE USER LEVEL AND AUTH    #
+        '###################################
+
+        Dim authed As Boolean = False
+
+        If AclClass.IsUserAuthed(nickname, BotID, channel) Then
+            authed = True
+        End If
+
+        'TEXT CMD SPECS 
+        Debug.Print("CHANNEL GRAB THREAD INFO")
+        Debug.Print(ThreadID)
+        Debug.Print(CurrBotName)
+        Debug.Print(Message)
+
+        'DETERMINE COMMAND LEVEL
+        If Master = True Or Master = False And authed = True Or authed = False Then
+
+            If ChannelCommandClass.CheckCommandInChannel(re, Message, tnSocket, SendBytes, BotID, BotName, channel) = True Then
+                Return True
+            End If
+
+            If MathChannelClass.CheckMathChannel(re, Message, tnSocket, SendBytes, BotID, BotName, channel) Then
+                Return True
+            End If
+
+
+            If RegXPChecker("^" & cmdPrefix & "set pass (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "set pass (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                If item = "" Then
+                    SendInfo("PRIVMSG " & channel & " :Please include a username when setting a password." & item & vbCrLf, SendBytes, tnSocket)
+                Else
+                    SendInfo("NOTICE " & nickname & " :Please notice me set pass:UserName PasswordHere for user " & item & "." & vbCrLf, SendBytes, tnSocket)
+                End If
+
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "ident$", Message) Then
+                re = New Regex("^" & cmdPrefix & "ident")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                Dim serverip As String
+                serverip = GetField("SELECT ServerIP  FROM tblserverlist WHERE BotID=" & BotID & " AND ServerIP=""" & currServer & """", "ServerIP", "GetIP")
+                Debug.Print(address.ToString)
+
+                If serverip = "" Then
+                    Return False
+                End If
+
+                Dim reply As String = GetField("SELECT Ident FROM tblserverlist WHERE BotID=" & BotID & " AND ServerIP=""" & currServer & """", "Ident", "Ident")
+
+                If reply = "" Then
+                    Return False
+                End If
+
+                SendInfo(reply, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "sha (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "sha (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                If item = "" Then
+                    SendInfo("PRIVMSG " & channel & " :Please include a username when setting a password." & item & vbCrLf, SendBytes, tnSocket)
+                Else
+                    SendInfo("PRIVMSG " & channel & " :" & GenerateHash(item) & vbCrLf, SendBytes, tnSocket)
+                End If
+
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "nick (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "nick (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("NICK " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "delserver (?<item>.+?)", Message) Then
+                re = New Regex("^" & cmdPrefix & "delserver (?<item>.+?)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("PRIVMSG " & channel & " :Deleted server" & item & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "addserver (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "addserver (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                If AddServer(item, GetBotID(BotName), "6667", 1, 1) Then
+
+                End If
+
+                SendInfo("PRIVMSG " & channel & " :Added server " & item & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^http://(?<site>.+)", Message) Then
+                re = New Regex("^http://(?<site>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("site").ToString
+                Dim url As String = "http://" & item
+                Dim http As New HTTPSocketClass
+
+                If http.IsValidSite(url, channel, tnSocket, SendBytes) Then
+                    Return True
+                Else
+                    Return False
+                End If
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "quit (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "quit (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("QUIT :" & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "quit$", Message) Then
+                If nickname = "MrTwig" Or nickname = "MrPenguin" Then
+                    SendInfo("PRIVMSG " & channel & " :fag", SendBytes, tnSocket)
+
+                    Return True
+                End If
+                SendInfo("QUIT :" & "Good Bye", SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "kick (?<item>.+) (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "kick (?<item>.+?) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+                SendInfo("KICK " & channel & " " & item & " :" & item2, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "kick (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "kick (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("KICK " & channel & " " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "mode (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "mode (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("MODE " & channel & " " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "op (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "op (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("MODE " & channel & " +o " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "deop (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "deop (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("MODE " & channel & " -o " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "voice (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "voice (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("MODE " & channel & " +v " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "help (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "help (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SQL = "SELECT tblbotcmdlist.BotID, tblbotcmdlist.Command, tblbotcmdlist.Usage, tblbotcmdlist.Syntax FROM tblbotcmdlist GROUP BY tblbotcmdlist.BotID, tblbotcmdlist.Command, tblbotcmdlist.Usage, tblbotcmdlist.Syntax HAVING (((tblbotcmdlist.BotID)=" & BotID & ") AND ((tblbotcmdlist.Command)=""" & QueryClean(item) & """));"
+
+                Dim conn As New MySqlConnection
+                Dim myCommand As New MySqlCommand
+                Dim myReader As MySqlDataReader
+
+                conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+                Try
+                    conn.Open()
+                    Try
+                        myCommand.Connection = conn
+                        myCommand.CommandText = SQL
+                        myReader = myCommand.ExecuteReader
+                        Dim reply As String = ""
+
+                        While myReader.Read
+                            reply = "Command:" & nz(myReader.GetValue(1), "")
+                            reply = reply & "  Syntax:" & nz(myReader.GetValue(3), "")
+                            Debug.Print(reply)
+
+                            If reply = "Command:  Syntax:" Then
+
+                            Else
+                                SendInfo("NOTICE " & nickname & " :" & reply, SendBytes, tnSocket)
+                                Wait(2000)
+                            End If
+
+                        End While
+
+                    Catch myerror As MySqlException
+                        MsgBox("There was an error reading from the database: " & myerror.Message)
+                    End Try
+                Catch myerror As MySqlException
+                    MsgBox("Error connecting to the database: " & myerror.Message)
+                Finally
+                    If conn.State <> ConnectionState.Closed Then conn.Close()
+                End Try
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "help$", Message) Then
+                SQL = "SELECT tblbotcmdlist.BotID, tblbotcmdlist.Command, tblbotcmdlist.Usage, tblbotcmdlist.Syntax FROM tblbotcmdlist GROUP BY tblbotcmdlist.BotID, tblbotcmdlist.Command, tblbotcmdlist.Usage, tblbotcmdlist.Syntax HAVING (((tblbotcmdlist.BotID)=" & BotID & "));"
+
+                Dim conn As New MySqlConnection
+                Dim myCommand As New MySqlCommand
+                Dim myReader As MySqlDataReader
+
+                conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+                Try
+                    conn.Open()
+                    Try
+                        myCommand.Connection = conn
+                        myCommand.CommandText = SQL
+                        myReader = myCommand.ExecuteReader
+                        Dim reply As String = ""
+
+                        While myReader.Read
+                            reply = "Command:" & nz(myReader.GetValue(1), "")
+                            reply = reply & "  Syntax:" & nz(myReader.GetValue(3), "")
+                            If reply = "Command:  Syntax:" Then
+
+                            Else
+                                SendInfo("NOTICE " & nickname & " :" & reply, SendBytes, tnSocket)
+                                Wait(2000)
+                            End If
+                        End While
+
+                    Catch myerror As MySqlException
+                        MsgBox("There was an error reading from the database: " & myerror.Message)
+                    End Try
+                Catch myerror As MySqlException
+                    MsgBox("Error connecting to the database: " & myerror.Message)
+                Finally
+                    If conn.State <> ConnectionState.Closed Then conn.Close()
+                End Try
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "errorlog (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "errorlog (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                If RegXPChecker(ZeroTo9Regex, item) Then
+                    item = System.Convert.ToInt32(item)
+                    If item < 0 Then
+                        Return False
+                    End If
+                Else
+                    Return False
+                End If
+
+                SQL = "SELECT IDNum,ErrorNumber,HappenedWhen FROM tblerrorlog WHERE BotID=" & BotID & " ORDER BY IDNum DESC LIMIT " & QueryClean(item)
+
+                Dim conn As New MySqlConnection
+                Dim myCommand As New MySqlCommand
+                Dim myReader As MySqlDataReader
+
+                conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+                Try
+                    conn.Open()
+                    Try
+                        myCommand.Connection = conn
+                        myCommand.CommandText = SQL
+                        myReader = myCommand.ExecuteReader
+
+                        Dim reply As String = ""
+                        While myReader.Read
+                            reply = "Error Num:" & nz(myReader.GetValue(1), "") & " at:" & nz(myReader.GetValue(2), "")
+                            reply = Replace(reply, vbCrLf, "")
+                            Debug.Print(reply)
+
+                            If reply = "Error Num: at:" Then
+                                Return True
+                            End If
+                            SendInfo("PRIVMSG " & channel & " :" & reply, SendBytes, tnSocket)
+                            Wait(2200)
+
+                        End While
+                        Return True
+                    Catch myerror As MySqlException
+                        MsgBox("There was an error reading from the database: " & myerror.Message)
+                    End Try
+                Catch myerror As MySqlException
+                    MsgBox("Error connecting to the database: " & myerror.Message)
+                Finally
+                    If conn.State <> ConnectionState.Closed Then conn.Close()
+                End Try
+                SendInfo("PRIVMSG " & channel & " :Hooray no errors! you must of fixed me!", SendBytes, tnSocket)
+                Return False
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "delerrorlog$", Message) Then
+
+                If DeleteRecords("DELETE FROM tblerrorlog WHERE BotID=" & BotID, "Error log Del") Then
+
+                End If
+
+                SendInfo("PRIVMSG " & channel & " :Deleted error log", SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "calc (?<item>.+)\*(?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "calc (?<item>.+)\*(?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                If RegXPChecker(ZeroTo9Regex, item) = False Or RegXPChecker(ZeroTo9Regex, item2) = False Then
+                    Return False
+                End If
+
+                SendInfo("PRIVMSG " & channel & " :Answer: " & item * item2, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "setupftp (?<item>.+) (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "setupftp (?<item>.+) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                If RegXPChecker(ZeroTo9Regex, item2) = False Then
+                    Return False
+                End If
+
+                SQL = "INSERT INTO tblP2PServers(Server,Port,Proto,BotID) VALUES(""" & item & """,""" & item2 & """,""" & "FTP" & """," & BotID & ")"
+                If InsertRecords(SQL, "InsertFTP") Then
+
+                End If
+
+                SendInfo("NOTICE " & nickname & " :to set a username notice me: SetFtpUser <username>", SendBytes, tnSocket)
+                SendInfo("NOTICE " & nickname & " :to set a username notice me: SetFtpPass <pass>", SendBytes, tnSocket)
+                SendInfo("PRIVMSG " & channel & " :Added ftp server " & item & " on port " & item2, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "setupssh (?<item>.+) (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "setupssh (?<item>.+) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                If RegXPChecker(ZeroTo9Regex, item2) = False Then
+                    Return False
+                End If
+
+                SQL = "INSERT INTO tblP2PServers(Server,Port,Proto,BotID) VALUES(""" & item & """,""" & item2 & """,""" & "FTP" & """," & BotID & ")"
+                If InsertRecords(SQL, "InsertFTP") Then
+
+                End If
+
+                SendInfo("NOTICE " & nickname & " :to set a username notice me: SetFtpUser <username>", SendBytes, tnSocket)
+                SendInfo("NOTICE " & nickname & " :to set a username notice me: SetFtpPass <pass>", SendBytes, tnSocket)
+                SendInfo("PRIVMSG " & channel & " :Added ftp server " & item & " on port " & item2, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "setuptracker (?<item>.+) (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "setuptracker (?<item>.+) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                SQL = "INSERT INTO tblP2PServers(Server,Port,Proto,BotID) VALUES(""" & item & """,""" & item2 & """,""" & "BITTORRENT" & """," & BotID & ")"
+
+                If InsertRecords(SQL, "InsertFTP") Then
+
+                End If
+
+                SendInfo("PRIVMSG " & channel & " :Added torrent tracker: " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "mergetracker (?<item>.+) (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "mergetracker (?<item>.+) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                SQL = "INSERT INTO tblP2PServers(Server,Port,Proto,BotID) VALUES(""" & item & """,""" & item2 & """,""" & "BITTORRENT" & """," & BotID & ")"
+
+                If InsertRecords(SQL, "InsertFTP") Then
+
+                End If
+
+                SendInfo("PRIVMSG " & channel & " :Added torrent tracker: " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "devoice (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "devoice (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("MODE " & channel & " -v " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "ban (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "ban (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("MODE " & channel & " +b " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "last (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "last (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                'MAKE DB CALL
+                SQL = "SELECT message FROM tbluserchat WHERE tbluserchat.Nick=""" & QueryClean(item) & """ AND tbluserchat.Channel=""" & channel & """ ORDER BY idnum DESC LIMIT 1"
+
+                Dim conn As New MySqlConnection
+                Dim myCommand As New MySqlCommand
+                Dim myReader As MySqlDataReader
+
+                conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+                Try
+                    conn.Open()
+                    Try
+                        myCommand.Connection = conn
+                        myCommand.CommandText = SQL
+                        myReader = myCommand.ExecuteReader
+
+                        Dim reply As String = ""
+
+                        While myReader.Read
+                            reply = nz(myReader.GetValue(0), "")
+                        End While
+
+                        If reply = "" Then
+                            SendInfo("PRIVMSG " & channel & " :No history for " & item, SendBytes, tnSocket)
+                        Else
+                            SendInfo("PRIVMSG " & channel & " :" & item & " said: " & reply, SendBytes, tnSocket)
+                        End If
+
+                    Catch myerror As MySqlException
+                        MsgBox("There was an error reading from the database: " & myerror.Message)
+                    End Try
+                Catch myerror As MySqlException
+                    MsgBox("Error connecting to the database: " & myerror.Message)
+                Finally
+                    If conn.State <> ConnectionState.Closed Then conn.Close()
+                End Try
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "gem (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "gem (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                SQL = "INSERT INTO tbllines(botid, Command, Line) VALUES(" & BotID & ", """ & cmdPrefix & "gem" & """, """ & item & """)"
+
+                If InsertRecords(SQL, "GEM") Then
+
+                End If
+
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "gem$", Message) Then
+
+                Dim maxint As String = "0"
+                Dim minint As String = "0"
+                maxint = GetField("SELECT max(idnum) FROM tbllines", maxint, "Max")
+                minint = GetField("SELECT min(idnum) FROM tbllines", minint, "min") - 1
+
+                SQL = "SELECT Line FROM tbllines WHERE IDNum>=" & RandomNumber(maxint, minint)
+
+                Dim conn As New MySqlConnection
+                Dim myCommand As New MySqlCommand
+                Dim myReader As MySqlDataReader
+
+                conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+                Try
+                    conn.Open()
+
+                    Try
+                        myCommand.Connection = conn
+                        myCommand.CommandText = SQL
+                        myReader = myCommand.ExecuteReader
+                        Dim reply As String = ""
+                        While myReader.Read
+                            reply = "PRIVMSG " & channel & " :" & nz(myReader.GetValue(0), "")
+                            Exit While
+                        End While
+
+                        SendInfo(reply, SendBytes, tnSocket)
+
+                    Catch myerror As MySqlException
+                        MsgBox("There was an error reading from the database: " & myerror.Message)
+                    End Try
+                Catch myerror As MySqlException
+                    MsgBox("Error connecting to the database: " & myerror.Message)
+                Finally
+                    If conn.State <> ConnectionState.Closed Then conn.Close()
+                End Try
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "8ball (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "8ball (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                Dim EightBallResponse(20) As String
+                EightBallResponse(0) = "You may rely on it"
+                EightBallResponse(1) = "Yes - definitely"
+                EightBallResponse(2) = "Yes"
+                EightBallResponse(3) = "Without a doubt"
+                EightBallResponse(4) = "Very doubtful"
+                EightBallResponse(5) = "Signs point to yes"
+                EightBallResponse(6) = "Reply hazy, try again"
+                EightBallResponse(7) = "Outlook not so good"
+                EightBallResponse(8) = "Outlook good"
+                EightBallResponse(9) = "My sources say no"
+                EightBallResponse(10) = "My reply is no"
+                EightBallResponse(11) = "Most likely"
+                EightBallResponse(12) = "It is decidedly so"
+                EightBallResponse(13) = "It is certain"
+                EightBallResponse(14) = "Don't count on it"
+                EightBallResponse(15) = "Concentrate and ask again"
+                EightBallResponse(16) = "Cannot predict now"
+                EightBallResponse(17) = "Better not tell you now"
+                EightBallResponse(18) = "Ask again later"
+                EightBallResponse(19) = "As I see it, yes"
+
+
+                Dim rndnumeightball As Integer
+                rndnumeightball=randomnumber(19,0)
+                Debug.Print(rndnumeightball)
+                SendInfo("PRIVMSG " & channel & " :" & EightBallResponse(rndnumeightball),SendBytes,tnSocket)
+                Return True
+            End If
+            
+            If RegXPChecker("^" & cmdPrefix & "seen (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "seen (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                SQL = "SELECT TheTime,message FROM tbluserchat WHERE tbluserchat.Nick=""" & QueryClean(item) & """ AND tbluserchat.Channel=""" & QueryClean(channel) & """ ORDER BY idnum DESC LIMIT 1"
+
+                Dim conn As New MySqlConnection
+                Dim myCommand As New MySqlCommand
+                Dim myReader As MySqlDataReader
+
+                conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+                Try
+                    conn.Open()
+
+                    Try
+                        myCommand.Connection = conn
+                        myCommand.CommandText = SQL
+                        myReader = myCommand.ExecuteReader
+                        Dim reply As String = ""
+                        While myReader.Read
+                            reply = "PRIVMSG " & channel & " :" & item & " was last seen on: " & nz(myReader.GetValue(0), "Never") & " Saying " & nz(myReader.GetValue(1), "I Dont Exist!")
+                        End While
+
+                        SendInfo(reply, SendBytes, tnSocket)
+                    Catch myerror As MySqlException
+                        MsgBox("There was an error reading from the database: " & myerror.Message)
+                    End Try
+                Catch myerror As MySqlException
+                    MsgBox("Error connecting to the database: " & myerror.Message)
+                Finally
+                    If conn.State <> ConnectionState.Closed Then conn.Close()
+                End Try
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "google (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "google (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                Dim url As String = "http://www.google.com/search?source=ig&hl=en&rlz=&=&q=" & item & "btnG=Google+Search"
+                Dim webClient As System.Net.WebClient = New System.Net.WebClient()
+                Dim result2 As String = webClient.DownloadString(url)
+
+
+                'SendInfo(str2, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "weather (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "weather (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                Dim url As String = "http://api.wunderground.com/auto/wui/geo/WXCurrentObXML/index.xml?query=" & item
+                Dim webClient As System.Net.WebClient = New System.Net.WebClient()
+                webClient.DownloadFile(url, "c:\tmp.txt")
+                Dim str2 As String = ""
+                Dim xmlparse As New XmlReader
+                Dim reply As String
+
+                reply = xmlparse.ReadXML("c:\tmp.txt")
+
+                If reply = "" Or reply = "None" Then
+                    Return False
+                End If
+
+                reply = "PRIVMSG " & channel & " :" & reply
+                SendInfo(reply, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "unban (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "unban (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("MODE " & channel & " -b " & item & "@", SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "say (?<item>.+)", Message) Then
+                re = New Regex("^\" & cmdPrefix & "say (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("PRIVMSG " & channel & " :" & item & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            'LEVEL ADDING AND GROUP CMD ADDING
+            If RegXPChecker("^\" & cmdPrefix & "addlevel (?<item>.+) (?<item2>.+)", Message) Then
+                re = New Regex("^\" & cmdPrefix & "addlevel (?<item>.+) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                If InStr(item, "#") > 0 Then
+                    Return False
+                End If
+
+                If RegXPChecker(ZeroTo9Regex, item2) = False Then
+                    SendInfo("PRIVMSG " & channel & " :" & item & vbCrLf, SendBytes, tnSocket)
+                End If
+
+                result = AclClass.AddUserLevel(item, BotID, channel, BotName, item2, ServerName)
+
+                If Not result = "False" Then
+                    SendInfo(result, SendBytes, tnSocket)
+                End If
+
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "addlevel (?<item>.+) ", Message) Then
+                re = New Regex("^\" & cmdPrefix & "addlevel (?<item>.+)")
+                mt = re.Match(Message)
+                item = "#" & mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                If RegXPChecker(ZeroTo9Regex, item2) = False Then
+                    SendInfo("PRIVMSG " & channel & " :" & item & vbCrLf, SendBytes, tnSocket)
+                End If
+
+                result = AclClass.AddUserLevel(item, BotID, channel, BotName, item2, ServerName)
+
+                If Not result = "False" Then
+                    SendInfo(result, SendBytes, tnSocket)
+                End If
+
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "dellevel (?<item>.+?) (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "dellevel (?<item>.+?) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+                SendInfo("PRIVMSG " & channel & " :Deleted level " & item & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "delcmd (?<item>.+) group (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "delcmd (?<item>.+) group (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+                SendInfo("PRIVMSG " & channel & " :Deleted command group " & item2 & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "addgroup (?<item>.+?) (?<item2>.+)", Message) Then
+                re = New Regex("^\" & cmdPrefix & "addgroup (?<item>.+?) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+                result = AclClass.AddUserGroup(BotName, item2, BotID, channel, item, ServerName)
+
+                If Not result = "False" Then
+                    SendInfo(result, SendBytes, tnSocket)
+                End If
+
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "listgroups (?<item>.+?)", Message) Then
+                re = New Regex("^\" & cmdPrefix & "listgroups (?<item>.+?)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                If RegXPChecker(A2ZRegex, item) Then
+
+                    SQL = "SELECT BotGroup FROM tblaclbygroup WHERE BotID=" & BotID & " AND BotGroup=""" & item & """GROUP BY BotGroup"
+
+                    Dim conn As New MySqlConnection
+                    Dim myCommand As New MySqlCommand
+                    Dim myReader As MySqlDataReader
+
+                    conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+                    Try
+                        conn.Open()
+
+                        Try
+                            myCommand.Connection = conn
+                            myCommand.CommandText = SQL
+                            myReader = myCommand.ExecuteReader
+                            Dim reply As String = ""
+
+                            While myReader.Read
+                                reply = nz(myReader.GetValue(0), "")
+                                SendInfo("NOTICE " & nickname & " : Group " & reply & vbCrLf, SendBytes, tnSocket)
+                                Wait(1000)
+                            End While
+
+                        Catch myerror As MySqlException
+                            MsgBox("There was an error reading from the database: " & myerror.Message)
+                        End Try
+                    Catch myerror As MySqlException
+                        MsgBox("Error connecting to the database: " & myerror.Message)
+                    Finally
+                        If conn.State <> ConnectionState.Closed Then conn.Close()
+                    End Try
+                End If
+
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "listgroups$", Message) Then
+                SQL = "SELECT BotGroup FROM tblaclbygroup WHERE BotID=" & BotID & " GROUP BY BotGroup"
+
+                Dim conn As New MySqlConnection
+                Dim myCommand As New MySqlCommand
+                Dim myReader As MySqlDataReader
+
+                conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+                Try
+                    conn.Open()
+
+                    Try
+                        myCommand.Connection = conn
+                        myCommand.CommandText = SQL
+                        myReader = myCommand.ExecuteReader
+                        Dim reply As String = ""
+
+                        While myReader.Read
+                            reply = nz(myReader.GetValue(0), "")
+                            SendInfo("NOTICE " & nickname & " : Group " & reply & vbCrLf, SendBytes, tnSocket)
+                            Wait(1000)
+                        End While
+
+                    Catch myerror As MySqlException
+                        MsgBox("There was an error reading from the database: " & myerror.Message)
+                    End Try
+                Catch myerror As MySqlException
+                    MsgBox("Error connecting to the database: " & myerror.Message)
+                Finally
+                    If conn.State <> ConnectionState.Closed Then conn.Close()
+                End Try
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "listlevels (?<item>.+?)", Message) Then
+                re = New Regex("^\" & cmdPrefix & "listlevels (?<item>.+?)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                If RegXPChecker(ZeroTo9Regex, item) Then
+
+                    SQL = "SELECT Level FROM tblacl WHERE BotID=" & BotID & " AND Level=""" & item & """ GROUP BY Level"
+
+                    Dim conn As New MySqlConnection
+                    Dim myCommand As New MySqlCommand
+                    Dim myReader As MySqlDataReader
+
+                    conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+                    Try
+                        conn.Open()
+
+                        Try
+                            myCommand.Connection = conn
+                            myCommand.CommandText = SQL
+                            myReader = myCommand.ExecuteReader
+                            Dim reply As String = ""
+
+                            While myReader.Read
+                                reply = nz(myReader.GetValue(0), "")
+                                SendInfo("NOTICE " & nickname & " : Level " & reply & vbCrLf, SendBytes, tnSocket)
+                                Wait(1000)
+                            End While
+
+                        Catch myerror As MySqlException
+                            MsgBox("There was an error reading from the database: " & myerror.Message)
+                        End Try
+                    Catch myerror As MySqlException
+                        MsgBox("Error connecting to the database: " & myerror.Message)
+                    Finally
+                        If conn.State <> ConnectionState.Closed Then conn.Close()
+                    End Try
+                End If
+
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "listlevels$", Message) Then
+
+                SQL = "SELECT Level FROM tblacl WHERE BotID=" & BotID & " GROUP BY Level"
+
+                Dim conn As New MySqlConnection
+                Dim myCommand As New MySqlCommand
+                Dim myReader As MySqlDataReader
+
+                conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+                Try
+                    conn.Open()
+
+                    Try
+                        myCommand.Connection = conn
+                        myCommand.CommandText = SQL
+                        myReader = myCommand.ExecuteReader
+                        Dim reply As String = ""
+
+                        While myReader.Read
+                            reply = nz(myReader.GetValue(0), "")
+                            SendInfo("NOTICE " & nickname & " : Level " & reply & vbCrLf, SendBytes, tnSocket)
+                            Wait(1000)
+                        End While
+
+                    Catch myerror As MySqlException
+                        MsgBox("There was an error reading from the database: " & myerror.Message)
+                    End Try
+                Catch myerror As MySqlException
+                    MsgBox("Error connecting to the database: " & myerror.Message)
+                Finally
+                    If conn.State <> ConnectionState.Closed Then conn.Close()
+                End Try
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "delgroup (?<item>.+)", Message) Then
+                re = New Regex("^\" & cmdPrefix & "delgroup (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                result = AclClass.DelUserGroup(nickname, BotID, channel, item)
+
+                If Not result = "False" Then
+                    SendInfo("PRIVMSG " & channel & " :Deleted level " & item & vbCrLf, SendBytes, tnSocket)
+                End If
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "setupproxy (?<item>.+?)", Message) Then
+                re = New Regex("^\" & cmdPrefix & "setupproxy (?<item>.+?)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                SQL = "INSERT INTO tblserverevasion(botID, ThreadID,Server,BotName) VALUES(" & BotID & ", """ & ThreadID & """, """ & item & """,""" & BotName & """)"
+                InsertRecords(SQL, "SETUP PROXY")
+                SendInfo("PRIVMSG " & channel & " :Added proxy " & item & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "addcmd (?<item>.+?) (?<item2>.+)", Message) Then
+                re = New Regex("^\" & cmdPrefix & "addcmd (?<item>.+?) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                If RegXPChecker(ZeroTo9Regex, item2) Then
+                    SQL = "INSERT INTO tblbotcmdlist(botid, Command, Level) VALUES(" & BotID & ", """ & item & """, """ & item2 & """)"
+                    AddBotCmd(BotID, SQL)
+                    SendInfo("PRIVMSG " & channel & " :Added command " & item & " to level: " & item2 & vbCrLf, SendBytes, tnSocket)
+                ElseIf RegXPChecker(A2ZRegex, item2) Then
+                    SQL = "INSERT INTO tblbotcmdlist(botID, Command,GroupName) VALUES(" & BotID & ", """ & item & """, """ & item2 & """)"
+                    AddBotCmd(BotID, SQL)
+                    SendInfo("PRIVMSG " & channel & " :Added command " & item & " to group: " & item2 & vbCrLf, SendBytes, tnSocket)
+                End If
+
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "delcmd (?<item>.+?) (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "delcmd (?<item>.+?) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+                SendInfo("PRIVMSG " & channel & " :Deleted command level " & item & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "delcmd (?<item>.+?)", Message) Then
+                re = New Regex("^\" & cmdPrefix & "delcmd (?<item>.+?)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item").ToString
+
+                'If DeleteRecords("DELETE FROM tblbotcmdlist WHERE Command=""" & item & """", "Delete botcmdlist") Then
+
+                'End If
+
+                SendInfo("PRIVMSG " & channel & " :Deleted command level " & item & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "link (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "link (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("NOTICE  " & item & " :Link" & BotName, SendBytes, tnSocket)
+                SendInfo("PRIVMSG  " & channel & " :Linked to " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "unlink (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "unlink (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("PRIVMSG  " & channel & " :Linked " & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "action (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "action (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("PRIVMSG  " & channel & " :" & "ACTION " & item & "", SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "topic (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "topic (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("TOPIC " & channel & " :" & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "part (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "part (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                SendInfo("PART :" & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "rejoin$", Message) Then
+                SendInfo("PART :" & channel, SendBytes, tnSocket)
+                SendInfo("JOIN :" & channel, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "adduserprotect (?<item>.+) (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "adduserprotect (?<item>.+) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                If (AddProtect(item, BotName, item2, channel)) Then
+
+                End If
+
+                SendInfo("PRIVMSG " & channel & " :" & "added user", SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "adduserprotect (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "adduserprotect (?<item>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+
+                If (AddProtect(item, BotID, BotName)) Then
+
+                End If
+
+                SendInfo("PRIVMSG " & channel & " :" & "Added user:" & item, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "deluserprotect (?<item>.+) (?<item2>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "deluserprotect (?<item>.+) (?<item2>.+)")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString
+
+                If (DelProtect(item, BotName, item2, channel)) Then
+
+                End If
+
+                SendInfo("PRIVMSG " & channel & " :" & "deleted user", SendBytes, tnSocket)
+                Return True
+            Else
+                If RegXPChecker("^" & cmdPrefix & "deluser (?<item>.+)", Message) Then
+                    re = New Regex("^" & cmdPrefix & "deluser (?<item>.+)")
+                    mt = re.Match(Message)
+                    item = mt.Groups("item").ToString
+
+                    If (DelProtect(item, BotName, "", channel)) Then
+
+                    End If
+
+                    SendInfo("PRIVMSG " & channel & " :" & "deleted user", SendBytes, tnSocket)
+                    Return True
+                End If
+            End If
+
+            If RegXPChecker("^" & cmdPrefix & "deluserprotect (?<item>.+)", Message) Then
+                re = New Regex("^" & cmdPrefix & "deluserprotect (?<item>.+")
+                mt = re.Match(Message)
+                item = mt.Groups("item").ToString
+                item2 = mt.Groups("item2").ToString '
+
+                If (DelProtect(item, BotName, item2, channel)) Then
+
+                End If
+
+                SendInfo("PRIVMSG " & channel & " :" & "deleted user", SendBytes, tnSocket)
+                Return True
+            Else
+                If RegXPChecker("^" & cmdPrefix & "deluser (?<item>.+)", Message) Then
+                    re = New Regex("^" & cmdPrefix & "deluser (?<item>.+)")
+                    mt = re.Match(Message)
+                    item = mt.Groups("item").ToString
+
+                    If (DelProtect(item, BotName, "", channel)) Then
+
+                    End If
+
+                    SendInfo("PRIVMSG " & channel & " :" & "deleted user", SendBytes, tnSocket)
+                    Return True
+                End If
+            End If
+
+            If RegXPChecker("^\" & cmdPrefix & "login$", Message) Then
+                SendInfo("NOTICE " & nickname & " :Please notice me auth:password" & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+
+            If RegXPChecker("^\" & cmdPrefix & "mylevel$", Message) Then
+                Dim Ulevel As String = ""
+                Dim UAuth As String
+                GetField("SELECT Level FROM tblacl WHERE BotID=" & BotID & " AND UserAccessName=""" & nickname & """", Ulevel, "Ulevel")
+                SendInfo("NOTICE " & nickname & " :you are AuthStatus at Status" & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If Message = "gregbot" Then
+                SendInfo("PRIVMSG " & channel & " :I hate you " & nickname & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If Message = "Rick Astley" Then
+                SendInfo("PRIVMSG " & channel & " :Will Never Give You Up." & vbCrLf, SendBytes, tnSocket)
+                SendInfo("PRIVMSG  " & channel & " :Never Let You Down, Never Turn Around and Hurt You" & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+
+            If Message = "@whyistwiglame" Then
+                SendInfo("PRIVMSG " & channel & " :Canada" & vbCrLf, SendBytes, tnSocket)
+                Return True
+            End If
+            'NO CMD FOUND FOR MASTER
+            Return False
+        Else
+            'OTHER USERS GO HERE PROB CONVERT THIS TO A DB CALL
+            'NO CMD FOUND FOR ANYONE
+            Return False
+        End If
+    End Function
+
+    Public Function CtcpReply(ByVal message As String, ByVal nickname As String) As Boolean
+        'FUNCTION NAME: CtcpReply
+        'INPUT        : Message from channel, Nickname from channel
+        'EXISTANCE    : Replies to the user any ctcp request
+        'OUTPUT       : The nesscary request response over ctcp
+
+        If RegXPChecker("\001PING (?<ts>.+)\001", message) Then
+            Dim epochtime As String
+            Dim ddate As Date
+            ddate = "1/1/1970"
+            epochtime = CStr(DateDiff(DateInterval.Second, CDate("1/1/1970"), Now.ToUniversalTime))
+            SendInfo("NOTICE " & nickname & " :" & Chr(1) & "PING" & " " & epochtime & Chr(1), SendBytes, tnSocket)
+            Return True
+        End If
+
+        If RegXPChecker("\001VERSION\001", message) Then
+            SendInfo("NOTICE " & nickname & " :" & Chr(1) & "VERSION " & "Easy WinDrop " & 1 & Chr(1), SendBytes, tnSocket)
+            Return True
+        End If
+
+        If RegXPChecker("\001TIME\001", message) Then
+            SendInfo("NOTICE " & nickname & " :" & Chr(1) & "TIME" & " " & Now.Date.DayOfWeek.ToString & " " & Now.ToUniversalTime & " " & Now.Year & Chr(1), SendBytes, tnSocket)
+            Return True
+        End If
+        Return False
+    End Function
+
+    Public Function SetNickOnServer(ByRef tnSocket As Socket) As Boolean
+        'FUNCTION NAME: SetNickOnServer
+        'INPUT        : Nothing
+        'EXISTANCE    : Sets the nick and user pref stats
+        'OUTPUT       : Data to server about this connect to log in
+
+        If LocalFirstSW = True Then
+            SendInfo("NICK " & CurrBotName & vbCrLf, SendBytes, tnSocket)
+            SendInfo("USER EasyWinDrop 8 * : EasyWinDrop 1.0" & vbCrLf, SendBytes, tnSocket)
+            ConnectedToServer = True
+            LocalFirstSW = False
+            Return True
+        End If
+
+        If ChannelJoinSW = True Then
+            Wait(3000)
+            'CHANNEL JOIN
+            'InitialJoin()
+            ChannelJoinSW = False
+            JoinAnswer = True
+            Return True
+        End If
+        Return False
+    End Function
+
+    Public Function PingServer(ByVal RecvString) As Boolean
+        'FUNCTION NAME: PingServer
+        'INPUT        : Recv Data From Socket
+        'EXISTANCE    : Pings server to maintain connecitong
+        'OUTPUT       : Pong reply
+
+        If RegXPChecker("^PING \:(?<key>.+)", RecvString) Then
+            Dim re As New Regex("PING \:(?<key>.+)")
+            Dim item
+
+            mt = re.Match(RecvString)
+            item = mt.Groups("key").ToString
+            SendInfo("PONG :" & item & vbCrLf, SendBytes, tnSocket)
+            TheTextBox.AppendText("PONG :" & item & vbCrLf)
+            RecvString = ""
+            item = Nothing
+            Return True
+        End If
+        Return False
+    End Function
+
+    Public Function InitialJoin() As Boolean
+        'FUNCTION NAME: InitialJoin
+        'INPUT        : Nothing
+        'EXISTANCE    : Selects channels and joins then
+        'OUTPUT       : Joined channel
+
+        'CHANNEL INNER JOIN
+        'SELECT tblbots.idnum, tblchannellist.ChannelName
+        'FROM tblbots INNER JOIN tblchannellist ON tblbots.idnum = tblchannellist.BotID
+        'WHERE (((tblbots.idnum)=1));
+
+        SQL = "SELECT ChannelName,AutoOp FROM tblchannellist WHERE BotID=" & BotID
+
+        Dim conn As New MySqlConnection
+        Dim myCommand As New MySqlCommand
+        Dim myReader As MySqlDataReader
+
+        conn.ConnectionString = des.Decrypt(My.Settings.ConnStr)
+
+        Try
+            conn.Open()
+
+            Try
+                myCommand.Connection = conn
+                myCommand.CommandText = SQL
+                myReader = myCommand.ExecuteReader
+                Dim reply As String = ""
+
+                While myReader.Read
+                    reply = nz(myReader.GetValue(0), "")
+                    SendInfo("JOIN " & reply, SendBytes, tnSocket)
+                End While
+
+            Catch myerror As MySqlException
+                MsgBox("There was an error reading from the database: " & myerror.Message)
+                Return False
+            End Try
+        Catch myerror As MySqlException
+            MsgBox("Error connecting to the database: " & myerror.Message)
+            Return False
+        Finally
+            If conn.State <> ConnectionState.Closed Then conn.Close()
+        End Try
+        Return True
+    End Function
+
+    Public Function Quit(ByRef RecvString As String, ByVal ThreadID As Long) As Boolean
+        'FUNCTION NAME: Quit
+        'INPUT        : Recv Data,TheadID
+        'EXISTANCE    : Kills bot through proto
+        'OUTPUT       : sends quit cmd if its a panel kill, sends sig term to text box to remove
+
+        'PANEL KILL
+        Dim RegExp As String = ""
+
+        If ThreadID = ThreadKillID And Not ThreadID = 0 Then
+            '    SendInfo("QUIT :Easy Win Drop Panel Kill" & vbCrLf, SendBytes, tnSocket)
+            Wait(2000)
+            Return False
+        End If
+
+        'SERVER DISCONNECT
+        RegExp = "ERROR \:Closing Link: .+"
+        If RegXPChecker(RegExp, RecvString) Then
+            'SEND SIGTERM TO TEXTBOX
+            TheTextBox.AppendText("CLOSING:" & ThreadID)
+            'DETERMINE IF BOT NEEDS RECONNECT
+
+            If ExitSW Then
+                LocalFirstSW = True
+                ChannelJoinSW = True
+                tnSocket.Close()
+                Return True
+            End If
+
+            Quit = False
+            RecvString = ""
+            Exit Function
+        End If
+        Return False
+    End Function
+
+    Public Function RandomNumber(ByVal MaxNumber As Integer, Optional ByVal MinNumber As Integer = 0) As Integer
+        'FUNCTION NAME: RandomNumber
+        'INPUT        : MaxNumber,MinNumber
+        'EXISTANCE    : Gens random number
+        'OUTPUT       : A random number
+
+        'initialize random number generator
+        'if passed incorrect arguments, swap them
+        'can also throw exception or return 0
+
+        If MinNumber > MaxNumber Then
+            Dim t As Integer = MinNumber
+            MinNumber = MaxNumber
+            MaxNumber = t
+        End If
+        Return rndNum.Next(MinNumber, MaxNumber)
+    End Function
+End Class

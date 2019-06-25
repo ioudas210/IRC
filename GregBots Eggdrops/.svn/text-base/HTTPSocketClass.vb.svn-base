@@ -1,0 +1,134 @@
+﻿Imports System.Net
+Imports System.Net.Sockets
+Imports System.Text.RegularExpressions
+Imports System.IO
+Imports System.Text
+Imports MySql.Data.MySqlClient
+
+Public Class HTTPSocketClass
+
+    Public Function IsValidSite(ByVal Url As String, ByVal channel As String, ByRef IrcSocket As Socket, ByRef IrcSendByes As [Byte]()) As Boolean
+        'FUNCTION NAME: IsVailidSite
+        'INPUT        : Url , Channel, Irc Channel socket to send response to
+        'EXISTANCE    : This determines if someone put a url in a channel
+        'OUTPUT       : Title
+
+        Dim tnSocket As Socket
+        Dim SendBytes As [Byte]() = Nothing
+        Dim RecvString As String = String.Empty
+        Dim NumBytes As Integer = 0
+        Dim RecvBytes(255) As [Byte]
+        Dim re As Regex
+        Dim mt As Match
+        Dim item As String
+
+        Url = Url.Replace("http://", "")
+        Debug.Print(Url)
+        GetIP(Url, address)
+        Dim gg As String
+        Dim senddata As Boolean = False
+        gg = "http://" & Url
+
+        If address.ToString = "127.0.0.1" Then
+            Return False
+        End If
+
+ReconnectAgain:
+
+
+        ' RecvString = ""
+        tnSocket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+        Debug.Print(address.ToString)
+        Try
+            tnSocket.Connect(Url, 80)
+            'GET /path/file.html HTTP/1.1
+
+            'SendBytes = Encoding.ASCII.GetBytes("GET " & gg & " HTTP/1.1" & vbCrLf)
+
+            Do While tnSocket.Connected
+
+restartconn:
+                Do
+                    If NumBytes < 256 And SendData Then
+                        NumBytes = tnSocket.Receive(RecvBytes, RecvBytes.Length, 0)
+                        RecvString = RecvString + Encoding.ASCII.GetString(RecvBytes, 0, NumBytes)
+
+                        NumBytes = 0
+                    Else
+                        NumBytes = 0 'RESET
+                    End If
+
+                Loop While NumBytes = 256
+                If senddata = False Then
+                    SendInfo("GET " & gg & " HTTP/1.1" & vbCrLf, SendBytes, tnSocket)
+                    senddata = True
+
+                End If
+                'WE NOW HAVE RECV DATA
+                While Not RecvString = "" Or senddata = False
+                    Debug.Print(RecvString)
+
+
+                    'DETERMINE IF WE HAVE TO QUIT OR EXIT BY SERVER OR CMD
+                    If RegXPChecker("\<title\>(?<title>.+)\<\/title\>+", RecvString) Then
+                        re = New Regex("\<title\>(?<title>.+)\<\/title\>+")
+                        mt = re.Match(RecvString)
+                        item = mt.Groups("title").ToString
+                        item = Trim(item)
+
+                        SendInfo("PRIVMSG " & channel & " :" & item, SendBytes, IrcSocket)
+                        IsValidSite = True
+                        Return IsValidSite
+                    End If
+
+                    If InStr(RecvString, "400") > 0 Then
+                        GoTo cleanup
+                    End If
+
+
+                    Exit While
+                End While
+
+            Loop
+
+        Catch myerror As Exception
+
+            Debug.Print(myerror.GetHashCode())
+            Debug.Print(myerror.Message)
+
+            Debug.Print(myerror.ToString)
+            'Debug.Print(myerror.InnerException.ToString)
+
+            'WORD BASED EXCEPTION HANDLING
+
+            Select Case myerror.Message
+                Case "An existing connection was forcibly closed by the remote host"
+                    GoTo cleanup
+                Case "An established connection was aborted by the software in your host machine"
+                    GoTo cleanup
+
+            End Select
+
+            'HASH CODE SEEMS TO BE THE ONLY WAY TO GET UNIQUE ERROR NUMS.
+            'Too many api calls crash weird.
+
+            Select Case myerror.GetHashCode()
+                Case 1997173
+                    'GoTo cleanup
+            End Select
+
+            Command = Nothing
+            RecvString = Nothing
+            GoTo restartconn
+        End Try
+
+        'Cleanup
+        'CLEAN UP ALL VARS HERE
+cleanup:
+        tnSocket.Close()
+        tnSocket = Nothing
+        Command = Nothing
+        RecvString = Nothing
+        Return IsValidSite
+    End Function
+End Class

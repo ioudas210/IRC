@@ -1,0 +1,16 @@
+﻿Imports System.Net.Sockets
+Imports MySql.Data.MySqlClient
+Imports System.Text.RegularExpressions
+Imports System.Text
+
+Public Class ProxyClass
+
+    Public Function connectThroughProxy(ByRef ProxySocket As Socket, ByRef IrcSocket As Socket) As Boolean
+        Return True
+    End Function
+
+    Public Function GetProxyList(ByVal SQL As String) As Boolean
+        Return True
+    End Function
+
+End Class

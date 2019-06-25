@@ -1,0 +1,7 @@
+﻿Imports MySql.Data.MySqlClient
+Imports System.Text.RegularExpressions
+Imports System.Text
+
+Public Class AutoSkinner
+
+End Class

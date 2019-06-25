@@ -1,0 +1,43 @@
+﻿Imports MySql.Data.MySqlClient
+Imports System.Net.Sockets
+Imports System.Text.RegularExpressions
+
+Public Class P2PSetup
+
+    Private Sub ExitToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ExitToolStripMenuItem.Click
+        Me.Close()
+    End Sub
+
+    Private Sub AboutToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles AboutToolStripMenuItem.Click
+        Dim myfrm As New About
+        myfrm.Show()
+    End Sub
+
+    Private Sub btnAddServer_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnAddServer.Click
+
+    End Sub
+
+    Private Sub btnSaveServer_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnSaveServer.Click
+
+    End Sub
+
+    Private Sub btnDelServer_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnDeleteFTPServer.Click
+
+    End Sub
+
+    Private Sub AddServerToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles AddServerToolStripMenuItem.Click
+        Call btnAddServer_Click(sender, e)
+    End Sub
+
+    Private Sub SaveServerToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles SaveServerToolStripMenuItem.Click
+        Call btnSaveServer_Click(sender, e)
+    End Sub
+
+    Private Sub DeleteServerToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles DeleteServerToolStripMenuItem.Click
+        Call btnDelServer_Click(sender, e)
+    End Sub
+
+    Private Sub P2PSetup_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+
+    End Sub
+End Class

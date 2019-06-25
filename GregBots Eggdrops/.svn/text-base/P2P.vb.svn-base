@@ -1,0 +1,379 @@
+﻿Imports MySql.Data.MySqlClient
+Imports System.IO
+Imports System.Text.RegularExpressions
+Imports System.Net.Sockets
+Imports System.Text
+
+Public Class P2P
+    Public MaxUP As Long
+    Public MaxDown As Long
+
+    Public Function AddSite(ByVal Protocol As String, ByVal Address As String, Optional ByVal UserName As String = "", Optional ByVal Password As String = "") As Boolean
+
+        Return True
+    End Function
+
+    Public Function BitTorrentSeed(ByVal Url As String, ByVal UserName As String, ByVal Pass As String, ByRef IrcSocket As Socket, ByRef IrcSendByes As [Byte](), ByVal Channel As String) As Boolean
+        'FUNCTION NAME: IsVailidSite
+        'INPUT        : Url , Channel, Irc Channel socket to send response to
+        'EXISTANCE    : This determines if someone put a url in a channel
+        'OUTPUT       : Title
+
+        Dim tnSocket As Socket
+        Dim SendBytes As [Byte]() = Nothing
+        Dim RecvString As String = String.Empty
+        Dim NumBytes As Integer = 0
+        Dim RecvBytes(255) As [Byte]
+        Dim re As Regex
+        Dim mt As Match
+        Dim item As String
+
+        Url = Url.Replace("http://", "")
+        Debug.Print(Url)
+        GetIP(Url, address)
+        Dim gg As String
+        gg = "http://" & Url
+
+ReconnectAgain:
+
+
+        RecvString = ""
+        tnSocket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+        Debug.Print(address.ToString)
+        Try
+            tnSocket.Connect(Url, 80)
+            'GET /path/file.html HTTP/1.1
+
+            ' SendBytes = Encoding.ASCII.GetBytes("GET " & gg & " HTTP/1.1" & vbCrLf)
+
+            Wait(1500)
+            Do While tnSocket.Connected
+                SendInfo("GET " & gg & " HTTP/1.1", SendBytes, tnSocket)
+restartconn:
+                Do
+                    If NumBytes < 256 Then
+                        NumBytes = tnSocket.Receive(RecvBytes, RecvBytes.Length, 0)
+                        RecvString = RecvString + Encoding.ASCII.GetString(RecvBytes, 0, NumBytes)
+                    Else
+                        NumBytes = 0 'RESET
+                    End If
+
+                Loop While NumBytes = 256
+
+                'WE NOW HAVE RECV DATA
+                While Not RecvString = ""
+
+                    'DETERMINE IF WE HAVE TO QUIT OR EXIT BY SERVER OR CMD
+                    If RegXPChecker("\<title\>(?<title>.+)\<\/title\>+", RecvString) Then
+                        re = New Regex("\<title\>(?<title>.+)\<\/title\>+")
+                        mt = re.Match(RecvString)
+                        item = mt.Groups("title").ToString
+                        item = Trim(item)
+
+                        SendInfo("PRIVMSG " & Channel & " :" & item, SendBytes, IrcSocket)
+                        BitTorrentSeed = True
+                        Return BitTorrentSeed
+                    End If
+                End While
+            Loop
+
+        Catch myerror As Exception
+            'NEED A BETTER METHOD FOR HANDLING
+            Debug.Print(myerror.GetHashCode())
+            Debug.Print(myerror.Message)
+            Debug.Print(myerror.ToString)
+
+            'WORD BASED EXCEPTION HANDLING
+
+            Select Case myerror.Message
+                Case "An established connection was aborted by the software in your host machine"
+                    GoTo cleanup
+            End Select
+
+            'HASH CODE SEEMS TO BE THE ONLY WAY TO GET UNIQUE ERROR NUMS.
+            'Too many api calls crash weird.
+
+            Select Case myerror.GetHashCode()
+                Case 1997173
+                    'GoTo cleanup
+            End Select
+
+            Command = Nothing
+            RecvString = Nothing
+            GoTo restartconn
+        End Try
+
+        'Cleanup
+        'CLEAN UP ALL VARS HERE
+cleanup:
+        tnSocket.Close()
+        tnSocket = Nothing
+        Command = Nothing
+        RecvString = Nothing
+        Return BitTorrentSeed
+    End Function
+
+    Public Function BitTorrentConnect(ByVal Url As String, ByVal UserName As String, ByVal Pass As String, ByRef IrcSocket As Socket, ByRef IrcSendByes As [Byte](), ByVal Channel As String) As Boolean
+        'FUNCTION NAME: BitTorrentConnect
+        'INPUT        : Url , Channel, Irc Channel socket to send response to
+        'EXISTANCE    : This determines if someone put a url in a channel
+        'OUTPUT       : Title
+
+        Dim tnSocket As Socket
+        Dim SendBytes As [Byte]() = Nothing
+        Dim RecvString As String = String.Empty
+        Dim NumBytes As Integer = 0
+        Dim RecvBytes(255) As [Byte]
+        Dim re As Regex
+        Dim mt As Match
+        Dim item As String
+
+        Url = Url.Replace("http://", "")
+        Debug.Print(Url)
+        GetIP(Url, address)
+        Dim gg As String
+        gg = "http://" & Url
+
+ReconnectAgain:
+
+
+        ' RecvString = ""
+        tnSocket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+        Debug.Print(address.ToString)
+        Try
+            tnSocket.Connect(Url, 80)
+            'GET /path/file.html HTTP/1.1
+
+            ' SendBytes = Encoding.ASCII.GetBytes("GET " & gg & " HTTP/1.1" & vbCrLf)
+
+            Wait(1500)
+            Do While tnSocket.Connected
+                SendInfo("GET " & gg & " HTTP/1.1", SendBytes, tnSocket)
+restartconn:
+                Do
+                    If NumBytes < 256 Then
+                        NumBytes = tnSocket.Receive(RecvBytes, RecvBytes.Length, 0)
+                        RecvString = RecvString + Encoding.ASCII.GetString(RecvBytes, 0, NumBytes)
+                    Else
+                        NumBytes = 0 'RESET
+                    End If
+
+                Loop While NumBytes = 256
+
+                'WE NOW HAVE RECV DATA
+                While Not RecvString = ""
+
+                    'DETERMINE IF WE HAVE TO QUIT OR EXIT BY SERVER OR CMD
+                    If RegXPChecker("\<title\>(?<title>.+)\<\/title\>+", RecvString) Then
+                        re = New Regex("\<title\>(?<title>.+)\<\/title\>+")
+                        mt = re.Match(RecvString)
+                        item = mt.Groups("title").ToString
+                        item = Trim(item)
+
+                        SendInfo("PRIVMSG " & Channel & " :" & item, SendBytes, IrcSocket)
+                        BitTorrentConnect = True
+                        Return BitTorrentConnect
+                    End If
+                End While
+            Loop
+
+        Catch myerror As Exception
+            'NEED A BETTER METHOD FOR HANDLING
+            Debug.Print(myerror.GetHashCode())
+            Debug.Print(myerror.Message)
+            Debug.Print(myerror.ToString)
+
+            'WORD BASED EXCEPTION HANDLING
+            Select Case myerror.Message
+                Case "An established connection was aborted by the software in your host machine"
+                    GoTo cleanup
+            End Select
+
+            'HASH CODE SEEMS TO BE THE ONLY WAY TO GET UNIQUE ERROR NUMS.
+            'Too many api calls crash weird.
+            Select Case myerror.GetHashCode()
+                Case 1997173
+                    'GoTo cleanup
+            End Select
+
+            Command = Nothing
+            RecvString = Nothing
+            GoTo restartconn
+        End Try
+
+        'Cleanup
+        'CLEAN UP ALL VARS HERE
+cleanup:
+        tnSocket.Close()
+        tnSocket = Nothing
+        Command = Nothing
+        RecvString = Nothing
+        Return BitTorrentConnect
+    End Function
+
+
+    Public Function FtpConnect(ByVal Url As String, ByVal UserName As String, ByVal Pass As String, ByRef IrcSocket As Socket, ByRef IrcSendByes As [Byte](), ByVal Channel As String) As Boolean
+        'FUNCTION NAME: IsVailidSite
+        'INPUT        : Url , Channel, Irc Channel socket to send response to
+        'EXISTANCE    : This determines if someone put a url in a channel
+        'OUTPUT       : Title
+
+        Dim tnSocket As Socket
+        Dim SendBytes As [Byte]() = Nothing
+        Dim RecvString As String = String.Empty
+        Dim NumBytes As Integer = 0
+        Dim RecvBytes(255) As [Byte]
+        Dim re As Regex
+        Dim mt As Match
+        Dim item As String
+
+        Url = Url.Replace("http://", "")
+        Debug.Print(Url)
+        GetIP(Url, address)
+        Dim gg As String
+        gg = "http://" & Url
+
+ReconnectAgain:
+
+
+        ' RecvString = ""
+        tnSocket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+        Debug.Print(address.ToString)
+        Try
+            tnSocket.Connect(Url, 80)
+            'GET /path/file.html HTTP/1.1
+
+            ' SendBytes = Encoding.ASCII.GetBytes("GET " & gg & " HTTP/1.1" & vbCrLf)
+
+            Wait(1500)
+            Do While tnSocket.Connected
+                SendInfo("GET " & gg & " HTTP/1.1", SendBytes, tnSocket)
+restartconn:
+                Do
+                    If NumBytes < 256 Then
+                        NumBytes = tnSocket.Receive(RecvBytes, RecvBytes.Length, 0)
+                        RecvString = RecvString + Encoding.ASCII.GetString(RecvBytes, 0, NumBytes)
+                    Else
+                        NumBytes = 0 'RESET
+                    End If
+
+                Loop While NumBytes = 256
+
+                'WE NOW HAVE RECV DATA
+                While Not RecvString = ""
+
+                    'DETERMINE IF WE HAVE TO QUIT OR EXIT BY SERVER OR CMD
+                    If RegXPChecker("\<title\>(?<title>.+)\<\/title\>+", RecvString) Then
+                        re = New Regex("\<title\>(?<title>.+)\<\/title\>+")
+                        mt = re.Match(RecvString)
+                        item = mt.Groups("title").ToString
+                        item = Trim(item)
+
+                        SendInfo("PRIVMSG " & Channel & " :" & item, SendBytes, IrcSocket)
+                        FtpConnect = True
+                        Return FtpConnect
+                    End If
+                End While
+            Loop
+
+        Catch myerror As Exception
+            'NEED A BETTER METHOD FOR HANDLING
+            Debug.Print(myerror.GetHashCode())
+            Debug.Print(myerror.Message)
+            Debug.Print(myerror.ToString)
+
+            'WORD BASED EXCEPTION HANDLING
+            Select Case myerror.Message
+                Case "An established connection was aborted by the software in your host machine"
+                    GoTo cleanup
+            End Select
+
+            'HASH CODE SEEMS TO BE THE ONLY WAY TO GET UNIQUE ERROR NUMS.
+            'Too many api calls crash weird.
+            Select Case myerror.GetHashCode()
+                Case 1997173
+                    'GoTo cleanup
+            End Select
+
+            Command = Nothing
+            RecvString = Nothing
+            GoTo restartconn
+        End Try
+
+        'Cleanup
+        'CLEAN UP ALL VARS HERE
+cleanup:
+        tnSocket.Close()
+        tnSocket = Nothing
+        Command = Nothing
+        RecvString = Nothing
+        Return FtpConnect
+    End Function
+
+    Public Function DelFile(ByVal Path As String, ByVal FileName As String) As Boolean
+        'FUNCTION NAME: DelFile
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        If RegXPChecker("PING \:(?<key>.+)", Path) Then
+            Dim re As New Regex("PING \:(?<key>.+)")
+            Dim mt As Match
+            Dim key
+
+            mt = re.Match(Path)
+            key = mt.Groups("key").ToString
+            'SendInfo("PONG :" & key & vbCrLf)
+
+            Path = ""
+            key = Nothing
+            Return True
+        End If
+        Return False
+    End Function
+
+    Public Function AddFile(ByVal Path As String, ByVal FileName As String) As Boolean
+        'FUNCTION NAME: AddFile
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        If RegXPChecker("PING \:(?<key>.+)", Path) Then
+            Dim re As New Regex("PING \:(?<key>.+)")
+            Dim mt As Match
+            Dim key
+
+            mt = re.Match(Path)
+            key = mt.Groups("key").ToString
+            'SendInfo("PONG :" & key & vbCrLf)
+
+
+            Path = ""
+            key = Nothing
+            Return True
+        End If
+        Return False
+    End Function
+
+    Public Function ListFiles(ByVal Path As String, ByVal Search As String) As Boolean
+        'FUNCTION NAME: ListFiles
+        'INPUT        :
+        'EXISTANCE    :
+        'OUTPUT       :
+
+        If RegXPChecker("PING \:(?<key>.+)", Path) Then
+            Dim re As New Regex("PING \:(?<key>.+)")
+            Dim mt As Match
+            Dim key
+
+            mt = re.Match(Path)
+            key = mt.Groups("key").ToString
+            'SendInfo("PONG :" & key & vbCrLf)
+
+            Path = ""
+            key = Nothing
+            Return True
+        End If
+        Return False
+    End Function
+End Class
